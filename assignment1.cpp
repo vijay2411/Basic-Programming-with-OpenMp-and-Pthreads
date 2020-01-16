@@ -29,25 +29,15 @@ double verify(int n,double **a, double** l, double** u, vector<int> pvector){
 		p[i][pvector[i]] = 1.0;
 	}
 	
-	// for(int i = 0; i < n; i++){
-	   // for(int j = 0; j < n; j++){
-		  // // cout << p[i][j] << "  ";
-	   // }
-	   // cout<< endl;
-   // }
-   
 	double tmp = 0.0;
 	for(int i = 0; i < n; i++){
 		for(int j = 0; j < n; j++){
 			tmp = 0.0;
 			for(int k = 0; k < n; k++){
 				tmp = tmp + p[i][k]*a[k][j] - l[i][k]*u[k][j]; 
-				//cout<<p[i][k]*a[k][j] - l[i][k]*u[k][j]<<" " ; 
 			}
 			result[i][j] = tmp;
-			// cout<<tmp<<" " ;
 		}
-		// cout<<endl ;
 	}
 	double norm=0.0,colnorm = 0.0;
 	for(int i = 0; i < n; i++){
@@ -155,7 +145,6 @@ int main(int argc, char *argv[]) {
 		}
 		
 	int j=0;
-	double val=0.0 ;
 	double utemp[n-k-1] ;
 	
 #pragma omp parallel for
@@ -163,14 +152,31 @@ int main(int argc, char *argv[]) {
 		utemp[i]=u[k][i+k+1] ;
 	}
 
-double *tempdub ;
-#pragma omp parallel for private(j,val,tempdub)
-	for(int i = k+1; i < n; i++){
+	double *tempdub ;
+	double *tempdub2;
+	double val,val2 ;
+	int ei=0 ;
+	
+#pragma omp parallel for private(j,val,tempdub,tempdub2,val2) lastprivate(ei)
+	for(int i = k+1; i < n-1; i+=2){
+		ei=i ;
 		val=l[i][k] ;
+		val2=l[i+1][k] ;
 		tempdub=a[i] ;
+		tempdub2=a[i+1] ;
 	   for(j = k+1; j<n; j++){
 		   tempdub[j] -= val*utemp[j-k-1];	
+		   tempdub2[j] -= val2*utemp[j-k-1];	
 	   }
+	}
+	
+	if(ei==n-3||k+1==n-1){
+		ei=n-1 ;	
+		tempdub=a[ei] ;
+		val=l[ei][k] ;
+		for(j = k+1; j<n; j++){
+		   tempdub[j] -= val*utemp[j-k-1];	
+		}
 	}
 		// int i=0,j=0 ;
 		
@@ -189,13 +195,6 @@ double *tempdub ;
    //print(u,n);
    double result = verify(n,a_orig,l,u,p);
    cout<<result<<endl;
-   
-   // for(int i = 0; i < n; i++){
-	   // for(int j = 0; j < n; j++){
-		  // // cout << u[i][j] << "  ";
-	   // }
-	   // cout<< endl;
-   // }
    
    return 0;
 }
