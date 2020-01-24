@@ -1,12 +1,18 @@
-#include <bits/stdc++.h>
-//#include <omp.h>
+#include <iostream>
+#include <math.h>
+#include <stdlib.h>
+#include <chrono>
+#include <vector>
 #include <pthread.h>
 using namespace std ;
 
+//Global pointers for A matrix, saved Instance of A matrix, Upper Triangular matrix, Lower Triangular matrix
 double **a;
 double **a_orig;
 double **u;
 double **l;
+int n;
+int cores;
 
 void print(double** matrix, int n){
 	for(int i = 0; i < n; i++){
@@ -19,12 +25,15 @@ void print(double** matrix, int n){
 	
 }
 double verify(int n,double **a, double** l, double** u, vector<int> pvector){
+	
+	//defining p matrix, result matrix (=PA-LU)
 	double **p; double **result;
 	p = new double* [n]; result = new double* [n];
 	for (int i=0; i < n; i++){
 		p[i] = new double[n];
 		result[i] = new double[n];
 	}
+	//initialisation of p,result matrix
 	for(int i =0 ; i < n; i++){
 		for(int j = 0; j < n; j++){
 			p[i][j] = 0.0;
@@ -35,6 +44,7 @@ double verify(int n,double **a, double** l, double** u, vector<int> pvector){
 		p[i][pvector[i]] = 1.0;
 	}
 	
+	//PA-LU loop
 	double tmp = 0.0;
 	for(int i = 0; i < n; i++){
 		for(int j = 0; j < n; j++){
@@ -45,6 +55,8 @@ double verify(int n,double **a, double** l, double** u, vector<int> pvector){
 			result[i][j] = tmp;
 		}
 	}
+	
+	//LU norm
 	double norm=0.0,colnorm = 0.0;
 	for(int i = 0; i < n; i++){
 		colnorm = 0.0;
@@ -57,83 +69,55 @@ double verify(int n,double **a, double** l, double** u, vector<int> pvector){
 	return norm;
 	
 }
-struct subarray 
-{ 
-   int start, end, n;
-	
-} ;
 
-void* initialize(void* args){
-	struct subarray *struct1ptr = (struct subarray*)(args);
-	int start = (*struct1ptr).start;
-	int end = (*struct1ptr).end;
-	int n = (*struct1ptr).n;
-	for (int i=start; i <= end; i++){
+void* assignParallel(void* pair_id_k){
+	//id allocated to this thread
+	int id = (*(pair<int,int> *)pair_id_k).first ;
+	int k = (*(pair<int,int> *)pair_id_k).second ;
+	
+	//total loops that needs to be run
+	int total=n-1-k ;	
+	
+	//start, end denote the index of rows to be run in this thread 
+	int start = (k+1)+id*total/cores ;
+	int end = min((k+1)+(id+1)*total/cores,n) ;
+	for(int i=start;i<end;i++){		
+		for(int j=k+1;j<n;j++){
+			a[i][j] -= l[i][k]*u[k][j];
+		}
+	}
+}
+
+int main(int argc, char *argv[]) {
+
+	//cores, N
+    string arg1= argv[1] ;
+    string arg2= argv[2] ;
+	
+	//Number of cores, Dimension n
+	cores= stoi(arg1);
+	n = stoi(arg2);
+	
+	//Allocating memory for Matrices
+	a = new double* [n];
+	a_orig = new double* [n];
+	u = new double* [n];
+	l = new double* [n];
+
+	//Time measurement, clock start.
+	auto start = std::chrono::high_resolution_clock::now();	
+	
+	//memory allocation to matrices
+	for (int i=0; i < n; i++){
 		a[i] = new double[n];
 		u[i] = new double[n];
 		l[i] = new double[n];
 		a_orig[i] = new double[n];
 	}
-	
-	free(args);
-	
-	return 0;
-}
-
-
-
-int main(int argc, char *argv[]) {
-   // printf() displays the string inside quotation
-    string arg1 = argv[1];
-	string arg2 = argv[2];
-	
-	int num_threads = stoi(arg2);
-	int n = stoi(arg1);
-	int kdash;
-	
-	//printf("n = %d", n);
-	double **a_psd;
-	a_psd = new double* [n];
-	double **a_orig_psd;
-	a_orig_psd = new double* [n];
-	double **u_psd;
-	u_psd = new double* [n];
-	double **l_psd;
-	l_psd = new double* [n];
-	
-	
-	auto start = std::chrono::high_resolution_clock::now();
-	
-	int idx_per_thread = n/num_threads;
-	int remaining_idxs = n%num_threads;
-	pthread_t id[num_threads];
-	for(int i = 0; i < num_threads; i++){
-		struct subarray struct1 = {i*num_threads, i*num_threads + idx_per_thread, n}; 
-		int status = pthread_create(&id[i], NULL, initialize, (void*)&struct1 );
-	}
-	
-	for (int i=n-1; i >= remaining_idxs; i--){
-		a_psd[i] = new double[n];
-		u_psd[i] = new double[n];
-		l_psd[i] = new double[n];
-		a_orig_psd[i] = new double[n];
-	}
-	
-	void* statusp;
-
-	for(int i =0; i < num_threads; i++){
-		pthread_join(id[i],&statusp);
-	}
-	
-	a = a_psd;
-	a_orig = a_orig_psd;
-	u = u_psd;
-	l = l_psd;
    
-   
+	//the Pie Vector,random initialisation of matrices
 	vector<int> p(n,0);
 	double drand48();
-	double max;
 
 	for(int i =0; i < n; i++){
 		p[i] = i;		
@@ -151,105 +135,92 @@ int main(int argc, char *argv[]) {
 				l[i][j] = 0.0;
 			}
 			a[i][j] = drand48();
-			a_orig[i][j] = a[i][j];	
-			//cout << a[i][j] << endl;
+			a_orig[i][j] = a[i][j];		   
 		}  
 	}
-   
-   
+	
+	//used for finding max in an array
+	double maxelem;
+	int kdash;	
+	
+	//THE N Iterations
 	for(int k = 0; k < n; k++){
-		max = 0.0;
-			
-
+		maxelem = 0.0;
+		auto startfor = std::chrono::high_resolution_clock::now();	
+	
 		for(int i = k; i < n; i++){
-			if(fabs(a[i][k])> max){
-				max = fabs(a[i][k]);
+			if(fabs(a[i][k])> maxelem){
+				maxelem = fabs(a[i][k]);
+				//index of max element
 				kdash = i;
 			}
 		}
 		
-		if(max==0.0){
+		//Singular Matrix
+		if(maxelem==0.0){
 			cerr<<"Singular matrix."<<endl;
 		}
 		
-		//swap in p 
+		//swapping p[k] & p[k'] 
 		int temp = p[k];
 		p[k] = p[kdash];
 		p[kdash] = temp;
 		
-		//swap rows in A
+		//swapping rows A[k] & A[k']
 		double* tmp = a[k];
 		a[k] = a[kdash];
 		a[kdash] = tmp;
-		   
-		double tmpdbl=0.0;
 
-//#pragma omp parallel for private(tmpdbl) if(k>500)
+		//swapping rows l[k] & l[k']
+		double tmpdbl=0.0;
 		for(int i = 0; i < k; i++){
 			tmpdbl = l[k][i];
 			l[k][i] = l[kdash][i];
 			l[kdash][i] = tmpdbl;
 		}
-
+		
 		u[k][k] = a[k][k];
 		
-//#pragma omp parallel for 
+		//assigning l[][],u[][] updated values
 		for(int i = k+1; i < n; i++){
 		   l[i][k] = a[i][k]*1.0/u[k][k];
 		   u[k][i] = a[k][i];
 		}
 		
-	int j=0;
-	double utemp[n-k-1] ;
-	
-//#pragma omp parallel for
-	for(int i=0;i<n-k-1;i++){
-		utemp[i]=u[k][i+k+1] ;
-	}
-
-	double *tempdub ;
-	double *tempdub2;
-	double val,val2 ;
-	int ei=0 ;
-	
-//#pragma omp parallel for private(j,val,tempdub,tempdub2,val2) lastprivate(ei)
-	for(int i = k+1; i < n-1; i+=2){
-		ei=i ;
-		val=l[i][k] ;
-		val2=l[i+1][k] ;
-		tempdub=a[i] ;
-		tempdub2=a[i+1] ;
-	   for(j = k+1; j<n; j++){
-		   tempdub[j] -= val*utemp[j-k-1];	
-		   tempdub2[j] -= val2*utemp[j-k-1];	
-	   }
-	}
-	
-	if(ei==n-3||k+1==n-1){
-		ei=n-1 ;	
-		tempdub=a[ei] ;
-		val=l[ei][k] ;
-		for(j = k+1; j<n; j++){
-		   tempdub[j] -= val*utemp[j-k-1];	
+		//creating $cores thread it
+		pthread_t thread[cores] ;
+		//pair of id, K
+		pair<int,int> arm[cores] ;
+		for(int i=0;i<cores;i++){
+			arm[i]= make_pair(i,k) ;
 		}
-	}
-		// int i=0,j=0 ;
+		//pthreads thread call
+		for(int i=0;i<cores;i++){
+			pthread_create(&thread[i], NULL, &assignParallel, (void*)&arm[i]); 
+		}
+		//joining threads
+		for(int i=0;i<cores;i++)
+			pthread_join(thread[i],NULL) ;
 		
-	// #pragma omp parallel for private(i,j)
-		// for(int itr =0;itr<(n-k-1)*(n-k-1);itr++){
-			// i=itr/(n-k-1) +k+1;
-			// j=itr%(n-k-1) + k+1;
-			// a[i][j] -= l[i][k]*u[k][j];
-		// }
 	}
-
+	
+	//Time measurements
 	auto end = std::chrono::high_resolution_clock::now();
 	cout<<"Time Taken: "<<chrono::duration_cast<chrono::microseconds>(end-start).count()/1000000.0<<endl ;
-   //print(a,n);
-   //print(l,n);
-   //print(u,n);
-   double result = verify(n,a_orig,l,u,p);
-   cout<<result<<endl;
-   
-   return 0;
+
+	//Following code( Verification part ) is commented because they consume too much time for n=8000
+	/*
+	double result = verify(n,a_orig,l,u,p);
+	cout<<result<<endl;
+	*/
+	
+   //Free the allocated memory
+	for (int i=0; i < n; i++){
+		delete a[i] ;
+		delete u[i] ;
+		delete l[i] ;
+		delete a_orig[i] ;
+	}
+	delete a,u,l,a_orig ;
+	return 0;
 }
