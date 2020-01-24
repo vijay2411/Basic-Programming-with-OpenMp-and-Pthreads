@@ -1,6 +1,8 @@
-#include <bits/stdc++.h>
+#include <iostream>
+#include <math.h>
 #include <stdlib.h>
-#include <omp.h>
+#include <chrono>
+#include <vector>
 using namespace std ;
 
 void print(double** matrix, int n){
@@ -190,6 +192,15 @@ int main(int argc, char *argv[]) {
 	double result = verify(n,a_orig,l,u,p);
 	cout<<result<<endl;
 	*/
-   
-   return 0;
+	
+	//Free the allocated memory
+	for (int i=0; i < n; i++){
+		delete a[i] ;
+		delete u[i] ;
+		delete l[i] ;
+		delete a_orig[i] ;
+	}
+	delete a,u,l,a_orig ;
+	
+	return 0;
 }
