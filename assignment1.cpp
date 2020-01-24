@@ -55,11 +55,11 @@ double verify(int n,double **a, double** l, double** u, vector<int> pvector){
 }
 
 int main(int argc, char *argv[]) {
-   // printf() displays the string inside quotation
-    string arg1 = argv[1] ;
+	//Dimension N of Matrix
+	string arg1 = argv[1] ;
 	int n = stoi(arg1);
-	int kdash;
-	//printf("n = %d", n);
+	
+	//Defined Matrix A, Saved Instance of A, Upper triangular matrix, Lower triangular matrix
 	double **a;
 	a = new double* [n];
 	double **a_orig;
@@ -69,7 +69,10 @@ int main(int argc, char *argv[]) {
 	double **l;
 	l = new double* [n];
 
+	//Time measurement, clock start.
 	auto start = std::chrono::high_resolution_clock::now();	
+	
+	//memory allocation to matrices
 #pragma omp parallel for	
 	for (int i=0; i < n; i++){
 		a[i] = new double[n];
@@ -78,10 +81,9 @@ int main(int argc, char *argv[]) {
 		a_orig[i] = new double[n];
 	}
    
-   
+	//the Pie Vector,random initialisation of matrices
 	vector<int> p(n,0);
 	double drand48();
-	double maxelem;
 
 	for(int i =0; i < n; i++){
 		p[i] = i;		
@@ -102,109 +104,92 @@ int main(int argc, char *argv[]) {
 			a_orig[i][j] = a[i][j];		   
 		}  
 	}
-   
- cout<<"Time Taken in Initialisation: "<<chrono::duration_cast<chrono::microseconds>(std::chrono::high_resolution_clock::now()-start).count()/1000000.0<<endl ;  
-	double sum=0.0 ;
+	
+	//used for finding max in an array
+	double maxelem;
+	int kdash;	
+	
+	//THE N Iterations
 	for(int k = 0; k < n; k++){
 		maxelem = 0.0;
-	auto startfor = std::chrono::high_resolution_clock::now();	
+		auto startfor = std::chrono::high_resolution_clock::now();	
 	
 #pragma omp parallel reduction(max:maxelem)
 		for(int i = k; i < n; i++){
 			if(fabs(a[i][k])> maxelem){
 				maxelem = fabs(a[i][k]);
+				//index of max element
 				kdash = i;
 			}
 		}
 		
+		//Singular Matrix
 		if(maxelem==0.0){
 			cerr<<"Singular matrix."<<endl;
 		}
 		
-		//swap in p 
+		//swapping p[k] & p[k'] 
 		int temp = p[k];
 		p[k] = p[kdash];
 		p[kdash] = temp;
 		
-		//swap rows in A
+		//swapping rows A[k] & A[k']
 		double* tmp = a[k];
 		a[k] = a[kdash];
 		a[kdash] = tmp;
-		   
-		double tmpdbl=0.0;
 
+		//swapping rows l[k] & l[k']
+		double tmpdbl=0.0;
 #pragma omp parallel for private(tmpdbl) if(k>500)
 		for(int i = 0; i < k; i++){
 			tmpdbl = l[k][i];
 			l[k][i] = l[kdash][i];
 			l[kdash][i] = tmpdbl;
 		}
-
+		
 		u[k][k] = a[k][k];
 		
+		//assigning l[][],u[][] updated values
 #pragma omp parallel for if(k<n-500)
 		for(int i = k+1; i < n; i++){
 		   l[i][k] = a[i][k]*1.0/u[k][k];
 		   u[k][i] = a[k][i];
 		}
 		
-	int j=0;
-	double utemp[n-k-1] ;
-	
+		//storing u[k,j] in a matrix for j=k to n-1 (algorithmic improvement)
+		double utemp[n-k-1] ;
 #pragma omp parallel for
-	for(int i=0;i<n-k-1;i++){
-		utemp[i]=u[k][i+k+1] ;
-	}
+		for(int i=0;i<n-k-1;i++){
+			utemp[i]=u[k][i+k+1] ;
+		}
 
-	double *tempdub ;
-	double *tempdub2;
-	double val,val2 ;
-	int ei=0 ;
+		//defined for algorithmic improvements
+		double *tempdub ;
+		double val ;
+		int j=0;
 	
-	auto endfor = std::chrono::high_resolution_clock::now();	
-	sum+=chrono::duration_cast<chrono::microseconds>(endfor-startfor).count() ;
-	
-
-// #pragma omp parallel for private(j,val,tempdub,tempdub2,val2) lastprivate(ei)
-	// for(int i = k+1; i < n-1; i+=2){
-		// ei=i ;
-		// val=l[i][k] ;
-		// val2=l[i+1][k] ;
-		// tempdub=a[i] ;
-		// tempdub2=a[i+1] ;
-	   // for(j = k+1; j<n; j++){
-		   // tempdub[j] -= val*utemp[j-k-1];	
-		   // tempdub2[j] -= val2*utemp[j-k-1];	
-	   // }
-	// }
-	
-	// if(ei==n-3||k+1==n-1){
-		// ei=n-1 ;	
-		// tempdub=a[ei] ;
-		// val=l[ei][k] ;
-		// for(j = k+1; j<n; j++){
-		   // tempdub[j] -= val*utemp[j-k-1];	
-		// }
-	// }
-	
+		//upating A[][]
 #pragma omp parallel for private(j,val,tempdub)
-	for(int i = k+1; i < n; i++){
-		val=l[i][k] ;
-		tempdub=a[i] ;
-	   for(j = k+1; j<n; j++){
-		   tempdub[j] -= val*utemp[j-k-1];	
-	   }
+		for(int i = k+1; i < n; i++){
+			val=l[i][k] ;
+			//pointer to ith row of A matrix
+			tempdub=a[i] ;
+			for(j = k+1; j<n; j++){
+				//Algo: "a(i,j) = a(i,j) - l(i,k)*u(k,j)"
+				tempdub[j] -= val*utemp[j-k-1];	
+			}
+		}
 	}
-}
-
+	
+	//Time measurements
 	auto end = std::chrono::high_resolution_clock::now();
 	cout<<"Time Taken: "<<chrono::duration_cast<chrono::microseconds>(end-start).count()/1000000.0<<endl ;
-	cout<<"sum: "<<sum/1000000.0<<endl ;
-   //print(a,n);
-   //print(l,n);
-   //print(u,n);
-    //double result = verify(n,a_orig,l,u,p);
-   // cout<<result<<endl;
+	
+	//Following code( Verification part ) is commented because they consume too much time for n=8000
+	/*
+	double result = verify(n,a_orig,l,u,p);
+	cout<<result<<endl;
+	*/
    
    return 0;
 }
