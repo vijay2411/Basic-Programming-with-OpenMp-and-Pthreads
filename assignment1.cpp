@@ -15,12 +15,15 @@ void print(double** matrix, int n){
 }
 
 double verify(int n,double **a, double** l, double** u, vector<int> pvector){
+	
+	//defining p matrix, result matrix (=PA-LU)
 	double **p; double **result;
 	p = new double* [n]; result = new double* [n];
 	for (int i=0; i < n; i++){
 		p[i] = new double[n];
 		result[i] = new double[n];
 	}
+	//initialisation of p,result matrix
 	for(int i =0 ; i < n; i++){
 		for(int j = 0; j < n; j++){
 			p[i][j] = 0.0;
@@ -31,6 +34,7 @@ double verify(int n,double **a, double** l, double** u, vector<int> pvector){
 		p[i][pvector[i]] = 1.0;
 	}
 	
+	//PA-LU loop
 	double tmp = 0.0;
 	for(int i = 0; i < n; i++){
 		for(int j = 0; j < n; j++){
@@ -41,6 +45,8 @@ double verify(int n,double **a, double** l, double** u, vector<int> pvector){
 			result[i][j] = tmp;
 		}
 	}
+	
+	//LU norm
 	double norm=0.0,colnorm = 0.0;
 	for(int i = 0; i < n; i++){
 		colnorm = 0.0;
